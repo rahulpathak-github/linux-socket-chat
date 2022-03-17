@@ -33,7 +33,7 @@ void showStats(int fd)
     bzero(buffer, BUFF_SIZE);
     for (int i = 0; i < MAX_CLIENTS; i++)
     {
-        string msg;
+        string msg = "";
         if (fd_idx.find(clients[i].fd) != fd_idx.end())
         {
             msg = "Client_fd " + to_string(clients[i].fd) + ": ";
@@ -42,8 +42,9 @@ void showStats(int fd)
                 msg = msg + "FREE";
             else
                 msg = msg + "BUSY";
+
+            msg = msg + "\n";
         }
-        msg = msg + "\n";
 
         strcat(buffer, msg.c_str());
     }
@@ -57,7 +58,15 @@ void communicator(int src_fd, int dest_fd)
     {
         bzero(buffer, BUFF_SIZE);
         read(src_fd, buffer, BUFF_SIZE);
-        if (strncmp(buffer, "goodbye", 7) == 0)
+        if (strncmp(buffer, "close", 5) == 0)
+        {
+            string msg = "Send 'goodbye' to unpair another client before closing the client!";
+            bzero(buffer, BUFF_SIZE);
+            bcopy(msg.c_str(), buffer, msg.size());
+            write(src_fd, buffer, BUFF_SIZE);
+            continue;
+        }
+        else if (strncmp(buffer, "goodbye", 7) == 0)
         {
             write(dest_fd, buffer, BUFF_SIZE);
             return;
@@ -100,6 +109,11 @@ void *connector(void *args)
         // cout << "DEBUG_77" << endl;
         if (strncmp(param1, "close", 5) == 0)
         {
+            char tempBuff[BUFF_SIZE];
+            string msg = "DISCONN_TRUE";
+            bzero(buffer, BUFF_SIZE);
+            bcopy(msg.c_str(), tempBuff, msg.size());
+            write(senderFd, tempBuff, BUFF_SIZE);
             break;
         }
         else if (destFd != -1 && (fd_idx.find(destFd) == fd_idx.end() || destFd == senderFd))
@@ -123,7 +137,9 @@ void *connector(void *args)
                     clients[slot_idx].status = destFd;
                     clients[fd_idx[destFd]].status = senderFd;
                     char connectedMsg[BUFF_SIZE];
-                    bcopy("CONN_TRUE", connectedMsg, 9);
+                    string connMsg = "CONN_TRUE " + to_string(senderFd);
+                    bcopy(connMsg.c_str(), connectedMsg, connMsg.size());
+                    // bcopy("CONN_TRUE", connectedMsg, 9);
                     write(destFd, connectedMsg, BUFF_SIZE);
                     communicator(senderFd, destFd);
                 }
@@ -142,7 +158,10 @@ void *connector(void *args)
         else if (param2 == NULL && strncmp(param1, "CONN_RECOG", 10) == 0 && clients[slot_idx].status != -1)
         {
             // cout << "DEBUG_108" << endl;
-
+            char conn_msg[BUFF_SIZE];
+            string connected = "Connected to fd " + to_string(senderFd);
+            bcopy(connected.c_str(), conn_msg, connected.size());
+            write(clients[slot_idx].status, &conn_msg, BUFF_SIZE);
             communicator(senderFd, clients[slot_idx].status);
         }
 
@@ -154,9 +173,9 @@ void *connector(void *args)
     }
     pthread_mutex_unlock(&muts[slot_idx]);
     close(senderFd);
-    cout << "[ / ] Client_fd " << clients[slot_idx].fd << " disconnected!" << endl;
-    availableSlots[slot_idx] = 1;
     fd_idx.erase(senderFd);
+    availableSlots[slot_idx] = 1;
+    cout << "[ / ] Client_fd " << clients[slot_idx].fd << " disconnected!" << endl;
 }
 
 int init()
